@@ -1,26 +1,26 @@
 package gobrowscap
 
 type Browser struct {
-	pattern              string
-	parent               string
-	comment              string
-	browser              string
-	browserType          string
-	browserMaker         string
-	platform             string
-	platformVersion      string
-	isMobileDevice       bool
-	hasIsMobileDevice    bool
-	isTablet             bool
-	hasIsTablet          bool
-	isCrawler            bool
-	hasIsCrawler         bool
-	version              string
-	majorVersion         string
-	minorVersion         string
-	deviceType           string
-	devicePointingMethod string
-	deviceName           string
-	deviceCodeName       string
-	deviceBrandName      string
+	Pattern              string
+	Parent               string
+	Comment              string
+	Browser              string
+	BrowserType          string
+	BrowserMaker         string
+	Platform             string
+	PlatformVersion      string
+	IsMobileDevice       bool
+	HasIsMobileDevice    bool
+	IsTablet             bool
+	HasIsTablet          bool
+	IsCrawler            bool
+	HasIsCrawler         bool
+	Version              string
+	MajorVersion         string
+	MinorVersion         string
+	DeviceType           string
+	DevicePointingMethod string
+	DeviceName           string
+	DeviceCodeName       string
+	DeviceBrandName      string
 }

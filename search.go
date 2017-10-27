@@ -1,130 +1,183 @@
 package gobrowscap
 
+import (
+	"runtime"
+	"sort"
+	"sync"
+)
+
 func mergeProperties(browser *Browser, section *IniSection) *Browser {
-	if browser.parent == "" {
-		browser.parent = section.parentName
+	if browser.Parent == "" {
+		browser.Parent = section.parentName
 	}
 
-	if browser.comment == "" {
-		browser.comment = section.comment
+	if browser.Comment == "" {
+		browser.Comment = section.comment
 	}
 
-	if browser.browser == "" {
-		browser.browser = section.browser
+	if browser.Browser == "" {
+		browser.Browser = section.browser
 	}
 
-	if browser.browserMaker == "" {
-		browser.browserMaker = section.browserMaker
+	if browser.BrowserMaker == "" {
+		browser.BrowserMaker = section.browserMaker
 	}
 
-	if browser.version == "" {
-		browser.version = section.version
+	if browser.Version == "" {
+		browser.Version = section.version
 	}
 
-	if browser.majorVersion == "" {
-		browser.majorVersion = section.majorVersion
+	if browser.MajorVersion == "" {
+		browser.MajorVersion = section.majorVersion
 	}
 
-	if browser.minorVersion == "" {
-		browser.minorVersion = section.minorVersion
+	if browser.MinorVersion == "" {
+		browser.MinorVersion = section.minorVersion
 	}
 
-	if browser.platform == "" {
-		browser.platform = section.platform
+	if browser.Platform == "" {
+		browser.Platform = section.platform
 	}
 
-	if section.hasIsMobileDevice && !browser.hasIsMobileDevice {
-		browser.isMobileDevice = section.isMobileDevice
-		browser.hasIsMobileDevice = true
+	if section.hasIsMobileDevice && !browser.HasIsMobileDevice {
+		browser.IsMobileDevice = section.isMobileDevice
+		browser.HasIsMobileDevice = true
 	}
 
-	if section.hasIsTablet && !browser.hasIsTablet {
-		browser.isTablet = section.isTablet
-		browser.hasIsTablet = true
+	if section.hasIsTablet && !browser.HasIsTablet {
+		browser.IsTablet = section.isTablet
+		browser.HasIsTablet = true
 	}
 
-	if section.hasCrawler && browser.hasIsCrawler {
-		browser.isCrawler = section.crawler
-		browser.hasIsCrawler = true
+	if section.hasCrawler && browser.HasIsCrawler {
+		browser.IsCrawler = section.crawler
+		browser.HasIsCrawler = true
 	}
 
-	if browser.deviceType == "" {
-		browser.deviceType = section.deviceType
+	if browser.DeviceType == "" {
+		browser.DeviceType = section.deviceType
 	}
 
-	if browser.devicePointingMethod == "" {
-		browser.devicePointingMethod = section.devicePointingMethod
+	if browser.DevicePointingMethod == "" {
+		browser.DevicePointingMethod = section.devicePointingMethod
 	}
 
-	if browser.platformVersion == "" {
-		browser.platformVersion = section.platformVersion
+	if browser.PlatformVersion == "" {
+		browser.PlatformVersion = section.platformVersion
 	}
 
-	if browser.browserType == "" {
-		browser.browserType = section.browserType
+	if browser.BrowserType == "" {
+		browser.BrowserType = section.browserType
 	}
 
-	if browser.deviceName == "" {
-		browser.deviceName = section.deviceName
+	if browser.DeviceName == "" {
+		browser.DeviceName = section.deviceName
 	}
 
-	if browser.deviceCodeName == "" {
-		browser.deviceCodeName = section.deviceCodeName
+	if browser.DeviceCodeName == "" {
+		browser.DeviceCodeName = section.deviceCodeName
 	}
 
-	if browser.deviceBrandName == "" {
-		browser.deviceBrandName = section.deviceBrandName
+	if browser.DeviceBrandName == "" {
+		browser.DeviceBrandName = section.deviceBrandName
 	}
 	return browser
 }
 
 func SearchBrowser(iniFile *IniFile, userAgent string) (*Browser, error) {
 
-	for batchIndex := 0; batchIndex < len(iniFile.batches); batchIndex++ {
-		batchMatches := iniFile.batches[batchIndex].FindAllString(userAgent, -1)
-		if batchMatches == nil {
-			continue
+	/* run search on all cores at once */
+	goroutineBatchesNum := len(iniFile.batches)/runtime.NumCPU() + 1
+
+	resultChan := make(chan int)
+	waitFor := runtime.NumCPU()
+	currentBatchIndex := 0
+	for i := 0; i < goroutineBatchesNum; i++ {
+		var wg sync.WaitGroup
+
+		foundBatchIndexes := make([]int, 0)
+
+		if i == goroutineBatchesNum-1 {
+			waitFor = len(iniFile.batches) - runtime.NumCPU()*i
 		}
 
-		for i := batchIndex * iniFile.batchSize; i < (batchIndex+1)*iniFile.batchSize; i++ {
-			pattern := iniFile.patterns[i]
-			matches := pattern.regex.FindStringSubmatch(userAgent)
-			if matches == nil {
-				continue
-			}
+		wg.Add(waitFor + 1)
 
-			var key int
-			if len(matches) == 1 {
-				key = pattern.intval
-			} else {
-				matchString := "@"
-				for i := 1; i < len(matches); i++ {
-					if i == len(matches)-1 {
-						matchString = matchString + matches[i]
-					} else {
-						matchString = matchString + matches[i] + "|"
-					}
+		for j := 0; j < waitFor; j++ {
+			go func(currentBatchIndex int, userAgent string) {
+				defer wg.Done()
+				batchMatches := iniFile.batches[currentBatchIndex].FindAllString(userAgent, -1)
+				if batchMatches != nil {
+					resultChan <- currentBatchIndex
+				} else {
+					resultChan <- -1
 				}
+			}(currentBatchIndex, userAgent)
+			currentBatchIndex++
+		}
 
-				var ok bool
-				key, ok = pattern.matches[matchString]
-				if !ok {
-					/* partial match, continue search */
+		go func() {
+			defer wg.Done()
+			for k := 0; k < waitFor; k++ {
+				result := <-resultChan
+				if result != -1 {
+					foundBatchIndexes = append(foundBatchIndexes, result)
+				}
+			}
+		}()
+
+		wg.Wait()
+
+		if len(foundBatchIndexes) > 0 {
+			sort.Ints(foundBatchIndexes)
+
+			for _, batchIndex := range foundBatchIndexes {
+				batchMatches := iniFile.batches[batchIndex].FindAllString(userAgent, -1)
+				if batchMatches == nil {
 					continue
 				}
+
+				for i := batchIndex * iniFile.batchSize; i < (batchIndex+1)*iniFile.batchSize; i++ {
+					pattern := iniFile.patterns[i]
+					matches := pattern.regex.FindStringSubmatch(userAgent)
+					if matches == nil {
+						continue
+					}
+
+					var key int
+					if len(matches) == 1 {
+						key = pattern.intval
+					} else {
+						matchString := "@"
+						for i := 1; i < len(matches); i++ {
+							if i == len(matches)-1 {
+								matchString = matchString + matches[i]
+							} else {
+								matchString = matchString + matches[i] + "|"
+							}
+						}
+
+						var ok bool
+						key, ok = pattern.matches[matchString]
+						if !ok {
+							/* partial match, continue search */
+							continue
+						}
+					}
+
+					section := iniFile.sections[key]
+
+					browser := new(Browser)
+					browser.Pattern = pattern.patternStr
+					browser = mergeProperties(browser, section)
+					for section.parentName != "" {
+						section = iniFile.sections[section.parent]
+						browser = mergeProperties(browser, section)
+					}
+
+					return browser, nil
+				}
 			}
-
-			section := iniFile.sections[key]
-
-			browser := new(Browser)
-			browser.pattern = pattern.patternStr
-			browser = mergeProperties(browser, section)
-			for section.parentName != "" {
-				section = iniFile.sections[section.parent]
-				browser = mergeProperties(browser, section)
-			}
-
-			return browser, nil
 		}
 	}
 
