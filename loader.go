@@ -12,6 +12,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"github.com/glenn-brown/golang-pkg-pcre/src/pkg/pcre"
 	"io"
 	"os"
 	"regexp"
@@ -40,15 +41,21 @@ type Pattern struct {
 	length      int
 	shortLength int
 	patternStr  string
-	regex       *regexp.Regexp
+	regex       *pcre.Regexp
 	intval      int
 	matches     map[string]int
+}
+
+type Batch struct {
+	regex      *pcre.Regexp
+	patternStr string
+	index      int
 }
 
 type IniFile struct {
 	patterns  []*Pattern
 	sections  map[int]*IniSection
-	batches   []*regexp.Regexp
+	batches   []*Batch
 	batchSize int
 	version   string
 }
@@ -475,26 +482,30 @@ func deduplicatePatterns(patterns map[string]*TmpPattern) map[string]*Deduplicat
 
 /* }}} */
 
-func compileAndAddBatchRegex(batchesArr []*regexp.Regexp, patternStr string, batchIndex int) ([]*regexp.Regexp, error) { /* {{{ */
-	regex, err := regexp.Compile(patternStr)
+func compileAndAddBatchRegex(batchesArr []*Batch, patternStr string, batchIndex int) ([]*Batch, error) { /* {{{ */
+	regex, err := pcre.Compile(patternStr, pcre.CASELESS)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%s", err.String())
 	}
-	batchesArr[batchIndex] = regex
+	batch := new(Batch)
+	batch.regex = &regex
+	batch.patternStr = patternStr
+	batch.index = batchIndex
+	batchesArr[batchIndex] = batch
 	return batchesArr, nil
 }
 
 /* }}} */
 
-func createRegexpBatches(patterns []*Pattern, batchSize int) ([]*regexp.Regexp, error) { /* {{{ */
+func createRegexpBatches(patterns []*Pattern, batchSize int) ([]*Batch, error) { /* {{{ */
 	var err error
 	batchIndex := 0
 	numInBatch := 1
-	regexBatches := make([]*regexp.Regexp, len(patterns)/batchSize+1)
-	batchStr := "(?i)^"
+	batches := make([]*Batch, len(patterns)/batchSize+1)
+	batchStr := "^"
 	for i := 0; i < len(patterns); i++ {
 
-		batchStr = batchStr + "(?:" + patterns[i].patternStr + ")"
+		batchStr = batchStr + "(?:" + strings.ToLower(patterns[i].patternStr) + ")"
 
 		if numInBatch < batchSize {
 			batchStr = batchStr + "|"
@@ -504,7 +515,7 @@ func createRegexpBatches(patterns []*Pattern, batchSize int) ([]*regexp.Regexp, 
 
 		batchStr = batchStr + "$"
 
-		regexBatches, err = compileAndAddBatchRegex(regexBatches, batchStr, batchIndex)
+		batches, err = compileAndAddBatchRegex(batches, batchStr, batchIndex)
 		if err != nil {
 			return nil, err
 		}
@@ -517,13 +528,13 @@ func createRegexpBatches(patterns []*Pattern, batchSize int) ([]*regexp.Regexp, 
 	if numInBatch < batchSize {
 		batchStr = batchStr + "$"
 
-		regexBatches, err = compileAndAddBatchRegex(regexBatches, batchStr, batchIndex)
+		batches, err = compileAndAddBatchRegex(batches, batchStr, batchIndex)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return regexBatches, nil
+	return batches, nil
 }
 
 /* }}} */
@@ -590,7 +601,7 @@ func LoadIniFile(path string, batchSize int) (*IniFile, error) { /* {{{ */
 	i := 0
 	readyPatterns := make([]*Pattern, len(patterns))
 	for patternString, patternObj := range patterns {
-		regex, err := regexp.Compile("(?i)^" + patternString + "$")
+		regex, err := pcre.Compile("^"+patternString+"$", pcre.CASELESS)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to compile regexp: %s, err: %s", patternString, err)
 		}
@@ -605,7 +616,7 @@ func LoadIniFile(path string, batchSize int) (*IniFile, error) { /* {{{ */
 			ready.priority = 2
 		}
 
-		ready.regex = regex
+		ready.regex = &regex
 		ready.intval = patternObj.intval
 		ready.position = patternObj.position
 		ready.matches = patternObj.matches
@@ -639,7 +650,7 @@ func LoadIniFile(path string, batchSize int) (*IniFile, error) { /* {{{ */
 		return true
 	})
 
-	regexBatches, err := createRegexpBatches(readyPatterns, batchSize)
+	batches, err := createRegexpBatches(readyPatterns, batchSize)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compile batch regex: %s", err)
 	}
@@ -647,7 +658,7 @@ func LoadIniFile(path string, batchSize int) (*IniFile, error) { /* {{{ */
 	iniFile := new(IniFile)
 	iniFile.patterns = readyPatterns
 	iniFile.sections = sections
-	iniFile.batches = regexBatches
+	iniFile.batches = batches
 	iniFile.batchSize = batchSize
 	iniFile.version = version
 
