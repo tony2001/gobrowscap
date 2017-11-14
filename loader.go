@@ -174,7 +174,7 @@ func parseSectionValues(section *IniSection, key string, value string, lineNum i
 		section.minorVersion = value
 	case "Platform":
 		section.platform = value
-	case "PlatformVersion":
+	case "Platform_Version":
 		section.platformVersion = value
 	case "isMobileDevice":
 		isMobileDevice, err := parseBoolValue(key, value, lineNum)
@@ -579,7 +579,7 @@ func processIniSections(sectionMap map[int]string, sections map[int]*IniSection)
 					tmpPatterns[compressedPattern] = p
 				}
 
-				tmpPatterns[compressedPattern].matches[i-1] = matches
+				tmpPatterns[compressedPattern].matches[i] = matches
 			}
 		}
 	}
