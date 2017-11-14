@@ -2,7 +2,6 @@ package gobrowscap
 
 import (
 	//	"fmt"
-
 	"regexp"
 	"runtime"
 	"sort"
@@ -196,9 +195,6 @@ func searchInBatches(iniFile *IniFile, batches []*Batch, userAgent string) (*Bro
 								matchString = matchString + matcher.GroupString(m) + "|"
 							}
 						}
-
-						//						fmt.Println(pattern.patternStr)
-						//						fmt.Println(matchString)
 
 						var ok bool
 						key, ok = pattern.matches[matchString]
