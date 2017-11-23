@@ -147,6 +147,11 @@ func searchInBatches(iniFile *IniFile, batches []*Batch, userAgent string) (*Bro
 
 		for j := 0; j < waitFor; j++ {
 			go func(arrIndex int, userAgent string) {
+				defer func() {
+					if r := recover(); r != nil {
+						resultChan <- -1
+					}
+				}()
 				defer wg.Done()
 				batchMatches := batches[arrIndex].regex.MatcherString(userAgent, 0).Matches()
 				if batchMatches {
