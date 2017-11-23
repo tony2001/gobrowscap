@@ -49,7 +49,7 @@ func mergeProperties(browser *Browser, section *IniSection) *Browser {
 		browser.HasIsTablet = true
 	}
 
-	if section.hasCrawler && browser.HasIsCrawler {
+	if section.hasCrawler && !browser.HasIsCrawler {
 		browser.IsCrawler = section.crawler
 		browser.HasIsCrawler = true
 	}
