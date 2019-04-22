@@ -1,8 +1,11 @@
 package gobrowscap
 
 import (
+	//	"fmt"
+	"regexp"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 )
 
@@ -84,36 +87,80 @@ func mergeProperties(browser *Browser, section *IniSection) *Browser {
 	return browser
 }
 
-func SearchBrowser(iniFile *IniFile, userAgent string) (*Browser, error) {
+var filterRegex = regexp.MustCompile(`^([A-Za-z]+)[^A-Za-z]+([A-Za-z]+)[^A-Za-z]+([A-Za-z]+).*`)
 
+const filterSize = 3
+
+func filterCreate(userAgent string) []string {
+
+	matches := filterRegex.FindStringSubmatch(strings.ToLower(userAgent))
+	if len(matches) == filterSize+1 /* leftmost part + 3 words */ {
+		words := make([]string, filterSize)
+		for i := 0; i < filterSize; i++ {
+			words[i] = matches[i+1]
+		}
+		return words
+	}
+	return nil
+}
+
+func filterBatches(iniFile *IniFile, userAgent string) []int {
+
+	filter := filterCreate(userAgent)
+	if filter != nil {
+		batchesToSearch := make([]int, 0)
+		for i := 0; i < len(iniFile.batches); i++ {
+			wordsFound := 0
+			for j := 0; j < filterSize; j++ {
+				if strings.Contains(iniFile.batches[i].patternStr, filter[j]) {
+					wordsFound++
+				} else {
+					break
+				}
+			}
+			if wordsFound == filterSize {
+				batchesToSearch = append(batchesToSearch, i)
+			}
+		}
+		return batchesToSearch
+	}
+	return nil
+}
+
+func searchInBatches(iniFile *IniFile, batches []*Batch, userAgent string) (*Browser, error) {
 	/* run search on all cores at once */
-	goroutineBatchesNum := len(iniFile.batches)/runtime.NumCPU() + 1
+	goroutineBatchesNum := len(batches)/runtime.NumCPU() + 1
 
 	resultChan := make(chan int)
 	waitFor := runtime.NumCPU()
-	currentBatchIndex := 0
+	arrIndex := 0
 	for i := 0; i < goroutineBatchesNum; i++ {
 		var wg sync.WaitGroup
 
 		foundBatchIndexes := make([]int, 0)
 
 		if i == goroutineBatchesNum-1 {
-			waitFor = len(iniFile.batches) - runtime.NumCPU()*i
+			waitFor = len(batches) - runtime.NumCPU()*i
 		}
 
 		wg.Add(waitFor + 1)
 
 		for j := 0; j < waitFor; j++ {
-			go func(currentBatchIndex int, userAgent string) {
+			go func(arrIndex int, userAgent string) {
+				defer func() {
+					if r := recover(); r != nil {
+						resultChan <- -1
+					}
+				}()
 				defer wg.Done()
-				batchMatches := iniFile.batches[currentBatchIndex].FindAllString(userAgent, -1)
-				if batchMatches != nil {
-					resultChan <- currentBatchIndex
+				batchMatches := batches[arrIndex].regex.MatcherString(userAgent, 0).Matches()
+				if batchMatches {
+					resultChan <- batches[arrIndex].index
 				} else {
 					resultChan <- -1
 				}
-			}(currentBatchIndex, userAgent)
-			currentBatchIndex++
+			}(arrIndex, userAgent)
+			arrIndex++
 		}
 
 		go func() {
@@ -132,28 +179,25 @@ func SearchBrowser(iniFile *IniFile, userAgent string) (*Browser, error) {
 			sort.Ints(foundBatchIndexes)
 
 			for _, batchIndex := range foundBatchIndexes {
-				batchMatches := iniFile.batches[batchIndex].FindAllString(userAgent, -1)
-				if batchMatches == nil {
-					continue
-				}
-
-				for i := batchIndex * iniFile.batchSize; i < (batchIndex+1)*iniFile.batchSize; i++ {
+				for i := batchIndex * iniFile.batchSize; i < (batchIndex+1)*iniFile.batchSize && i < len(iniFile.patterns); i++ {
 					pattern := iniFile.patterns[i]
-					matches := pattern.regex.FindStringSubmatch(userAgent)
-					if matches == nil {
+					matcher := pattern.regex.MatcherString(userAgent, 0)
+					hasMatches := matcher.Matches()
+					if !hasMatches {
 						continue
 					}
 
 					var key int
-					if len(matches) == 1 {
+					if matcher.Groups() == 0 {
 						key = pattern.intval
 					} else {
 						matchString := "@"
-						for i := 1; i < len(matches); i++ {
-							if i == len(matches)-1 {
-								matchString = matchString + matches[i]
+
+						for m := 1; m < matcher.Groups()+1; m++ {
+							if m == matcher.Groups() {
+								matchString = matchString + matcher.GroupString(m)
 							} else {
-								matchString = matchString + matches[i] + "|"
+								matchString = matchString + matcher.GroupString(m) + "|"
 							}
 						}
 
@@ -179,6 +223,33 @@ func SearchBrowser(iniFile *IniFile, userAgent string) (*Browser, error) {
 				}
 			}
 		}
+	}
+	return nil, nil
+}
+
+func SearchBrowser(iniFile *IniFile, userAgent string) (*Browser, error) {
+
+	var filteredBatches []*Batch
+	filteredBatchesIndexes := filterBatches(iniFile, userAgent)
+	if filteredBatchesIndexes == nil || len(filteredBatchesIndexes) == 0 {
+		return searchInBatches(iniFile, iniFile.batches, userAgent)
+	} else {
+		filteredBatches = make([]*Batch, len(filteredBatchesIndexes))
+		for i := 0; i < len(filteredBatchesIndexes); i++ {
+			filteredBatches[i] = iniFile.batches[filteredBatchesIndexes[i]]
+		}
+
+		browser, err := searchInBatches(iniFile, filteredBatches, userAgent)
+		if err != nil {
+			return nil, err
+		}
+
+		if browser != nil {
+			return browser, nil
+		}
+
+		/* repeat with the full list */
+		return searchInBatches(iniFile, iniFile.batches, userAgent)
 	}
 
 	return nil, nil
