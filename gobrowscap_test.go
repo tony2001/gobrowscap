@@ -5,6 +5,9 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -35,77 +38,59 @@ func TestLoadIniFile(t *testing.T) {
 }
 */
 func TestSearchBrowser(t *testing.T) {
-	if browser, ok := SearchBrowser(FILE, TEST_USER_AGENT); ok != nil {
-		t.Error("Browser not found")
-	} else if browser.Browser != "Chrome" {
-		t.Errorf("Expected Chrome but got %q", browser.Browser)
-	} else if browser.Platform != "MacOSX" {
-		t.Errorf("Expected MacOSX but got %q", browser.Platform)
-	} else if browser.Version != "37.0" {
-		t.Errorf("Expected 37.0 but got %q", browser.Version)
-	} else if browser.IsCrawler != false {
-		t.Errorf("Expected false but got %q", browser.IsCrawler)
-	}
+	browser, err := SearchBrowser(FILE, TEST_USER_AGENT)
+	require.NoError(t, err)
+
+	assert.Equal(t, "Chrome", browser.Browser)
+	assert.Equal(t, "MacOSX", browser.Platform)
+	assert.Equal(t, "37.0", browser.Version)
+	assert.False(t, browser.IsCrawler)
 }
 
 func TestGetBrowserIPhone(t *testing.T) {
-	if browser, ok := SearchBrowser(FILE, TEST_IPHONE_AGENT); ok != nil {
-		t.Error("Browser not found")
-	} else if browser.DeviceName != "iPhone" {
-		t.Errorf("Expected iPhone but got %q", browser.DeviceName)
-	} else if browser.Platform != "iOS" {
-		t.Errorf("Expected iOS but got %q", browser.Platform)
-	} else if browser.IsMobileDevice != true {
-		t.Errorf("Expected true but got %t", browser.IsMobileDevice)
-	}
+	browser, err := SearchBrowser(FILE, TEST_IPHONE_AGENT)
+	require.NoError(t, err)
+
+	assert.Equal(t, "Safari", browser.Browser)
+	assert.Equal(t, "iOS", browser.Platform)
+	assert.True(t, browser.IsMobileDevice)
 }
 
 func TestGetBrowserYandex(t *testing.T) {
-	if browser, ok := SearchBrowser(FILE, TEST_YANDEX_AGENT); ok != nil {
-		t.Error("Browser not found")
-	} else if browser.Browser != "Yandex Browser" {
-		t.Errorf("Expected Yandex Browser but got %q", browser.Browser)
-	} else if browser.IsCrawler != false {
-		t.Errorf("Expected false but got %t", browser.IsCrawler)
-	}
+	browser, err := SearchBrowser(FILE, TEST_YANDEX_AGENT)
+	require.NoError(t, err)
+
+	assert.Equal(t, "Yandex Browser", browser.Browser)
+	assert.False(t, browser.IsCrawler)
 }
 
 func TestGetBrowserAndroid(t *testing.T) {
-	if browser, ok := SearchBrowser(FILE, TEST_ANDROID_AGENT); ok != nil {
-		t.Error("Browser not found")
-	} else if browser.DeviceName != "Galaxy Note" {
-		t.Errorf("Expected Galaxy Note but got %q", browser.DeviceName)
-	} else if browser.Platform != "Android" {
-		t.Errorf("Expected Android but got %q", browser.Platform)
-	} else if browser.Browser != "Chrome" {
-		t.Errorf("Expected Chrome but got %q", browser.Browser)
-	} else if browser.IsCrawler != false {
-		t.Errorf("Expected false but got %t", browser.IsCrawler)
-	}
+	browser, err := SearchBrowser(FILE, TEST_ANDROID_AGENT)
+	require.NoError(t, err)
+
+	assert.Equal(t, "Galaxy Note", browser.DeviceName)
+	assert.Equal(t, "Android", browser.Platform)
+	assert.Equal(t, "Chrome", browser.Browser)
+	assert.False(t, browser.IsCrawler)
 }
 
 func TestGetBrowserMobileFirefox(t *testing.T) {
-	if browser, ok := SearchBrowser(FILE, TEST_MOBILE_FIREFOX); ok != nil {
-		t.Error("Browser not found")
-	} else if browser.DeviceName != "general Mobile Phone" {
-		t.Errorf("Expected general Mobile Phone but got %q", browser.DeviceName)
-	} else if browser.Platform != "Android" {
-		t.Errorf("Expected Android but got %q", browser.Platform)
-	} else if browser.Browser != "Firefox" {
-		t.Errorf("Expected Firefox but got %q", browser.Browser)
-	} else if browser.IsCrawler != false {
-		t.Errorf("Expected false but got %t", browser.IsCrawler)
-	}
+	browser, err := SearchBrowser(FILE, TEST_MOBILE_FIREFOX)
+	require.NoError(t, err)
+
+	assert.Equal(t, "general Mobile Phone", browser.DeviceName)
+	assert.Equal(t, "Android", browser.Platform)
+	assert.Equal(t, "Firefox", browser.Browser)
+	assert.False(t, browser.IsCrawler)
 }
 
 func TestGetBrowserIssues(t *testing.T) {
 	// https://github.com/digitalcrab/browscap_go/issues/4
 	ua := "Mozilla/5.0 (iPad; CPU OS 5_0_1 like Mac OS X) AppleWebKit/534.46 (KHTML, like Gecko) Version/5.1 Mobile/9A405 Safari/7534.48.3"
-	if browser, ok := SearchBrowser(FILE, ua); ok != nil {
-		t.Error("Browser not found")
-	} else if browser.DeviceType != "Tablet" {
-		t.Errorf("Expected tablet %q", browser.DeviceType)
-	}
+	browser, err := SearchBrowser(FILE, ua)
+	require.NoError(t, err)
+
+	assert.Equal(t, "Tablet", browser.DeviceType)
 }
 func TestLastVersion(t *testing.T) {
 	if testing.Short() {
@@ -113,10 +98,7 @@ func TestLastVersion(t *testing.T) {
 	}
 
 	version := GetFileVersion(FILE)
-	if version == "" {
-		t.Fatalf("Version not found")
-	}
-	//t.Logf("Last version is %q, current version: %q", version, InitializedVersion())
+	assert.NotEmpty(t, version)
 }
 
 func BenchmarkInit(b *testing.B) {
@@ -137,12 +119,8 @@ func BenchmarkSearchBrowser(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		idx := i % len(uas)
 
-		browser, ok := SearchBrowser(FILE, uas[idx])
-		if ok != nil {
-			b.Errorf("User agent not recognized: %s", uas[idx])
-		}
-		if browser == nil {
-			b.Errorf("User agent not recognized: %s", uas[idx])
-		}
+		browser, err := SearchBrowser(FILE, uas[idx])
+		require.NoError(b, err)
+		assert.NotNil(b, browser)
 	}
 }
