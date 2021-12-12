@@ -103,7 +103,8 @@ func TestLastVersion(t *testing.T) {
 
 func BenchmarkInit(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		LoadIniFile(TEST_INI_FILE, 100)
+		_, err := LoadIniFile(TEST_INI_FILE, 100)
+		require.NoError(b, err)
 	}
 }
 

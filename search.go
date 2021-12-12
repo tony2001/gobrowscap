@@ -1,7 +1,6 @@
 package gobrowscap
 
 import (
-	//	"fmt"
 	"regexp"
 	"runtime"
 	"sort"
@@ -231,12 +230,12 @@ func SearchBrowser(iniFile *IniFile, userAgent string) (*Browser, error) {
 
 	var filteredBatches []*Batch
 	filteredBatchesIndexes := filterBatches(iniFile, userAgent)
-	if filteredBatchesIndexes == nil || len(filteredBatchesIndexes) == 0 {
+	if len(filteredBatchesIndexes) == 0 {
 		return searchInBatches(iniFile, iniFile.batches, userAgent)
 	} else {
-		filteredBatches = make([]*Batch, len(filteredBatchesIndexes))
-		for i := 0; i < len(filteredBatchesIndexes); i++ {
-			filteredBatches[i] = iniFile.batches[filteredBatchesIndexes[i]]
+		filteredBatches = make([]*Batch, 0, len(filteredBatchesIndexes))
+		for _, index := range filteredBatchesIndexes {
+			filteredBatches = append(filteredBatches, iniFile.batches[index])
 		}
 
 		browser, err := searchInBatches(iniFile, filteredBatches, userAgent)
@@ -251,6 +250,4 @@ func SearchBrowser(iniFile *IniFile, userAgent string) (*Browser, error) {
 		/* repeat with the full list */
 		return searchInBatches(iniFile, iniFile.batches, userAgent)
 	}
-
-	return nil, nil
 }

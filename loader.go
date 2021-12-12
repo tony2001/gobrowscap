@@ -12,12 +12,13 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"github.com/glenn-brown/golang-pkg-pcre/src/pkg/pcre"
 	"io"
 	"os"
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/glenn-brown/golang-pkg-pcre/src/pkg/pcre"
 )
 
 type TmpPattern struct {
@@ -100,7 +101,7 @@ type IniSection struct {
 	deviceBrandName      string
 }
 
-func regexUnquote(quotedRegex string, matches []string) string { /* {{{ */
+func regexUnquote(quotedRegex string, matches []string) string {
 	replaceMap := make(map[string]string)
 	replaceMap[`\.`] = `\?`
 	replaceMap[`\\`] = `\`
@@ -143,9 +144,7 @@ func regexUnquote(quotedRegex string, matches []string) string { /* {{{ */
 	return resultStr
 }
 
-/* }}} */
-
-func parseBoolValue(fieldName string, value string, lineNum int) (bool, error) { /* {{{ */
+func parseBoolValue(fieldName string, value string, lineNum int) (bool, error) {
 	if value == "true" {
 		return true, nil
 	} else if value == "false" {
@@ -154,9 +153,7 @@ func parseBoolValue(fieldName string, value string, lineNum int) (bool, error) {
 	return false, fmt.Errorf("invalid value for %s: expected true/false, got '%s' on line %d", fieldName, value, lineNum)
 }
 
-/* }}} */
-
-func parseSectionValues(section *IniSection, key string, value string, lineNum int) (*IniSection, error) { /* {{{ */
+func parseSectionValues(section *IniSection, key string, value string, lineNum int) (*IniSection, error) {
 	switch key {
 	case "Parent":
 		section.parentName = value
@@ -215,9 +212,7 @@ func parseSectionValues(section *IniSection, key string, value string, lineNum i
 	return section, nil
 }
 
-/* }}} */
-
-func parseIniFile(path string) (string, map[int]string, map[int]*IniSection, error) { /* {{{ */
+func parseIniFile(path string) (string, map[int]string, map[int]*IniSection, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return "", nil, nil, err
@@ -322,7 +317,7 @@ func parseIniFile(path string) (string, map[int]string, map[int]*IniSection, err
 		parentName := sections[index].parentName
 		if parentName != "" {
 			parentIndex, ok := sectionMap[parentName]
-			if ok == true {
+			if ok {
 				sections[index].parent = parentIndex
 			} else {
 				return "", nil, nil, fmt.Errorf("unknown Parent value specified (not present in the section names): '%s'", parentName)
@@ -332,9 +327,7 @@ func parseIniFile(path string) (string, map[int]string, map[int]*IniSection, err
 	return version, sectionMapInverted, sections, nil
 }
 
-/* }}} */
-
-func mergeMap(a map[int]string, b map[int]string) map[int]string { /* {{{ */
+func mergeMap(a map[int]string, b map[int]string) map[int]string {
 	for k, v := range b {
 		_, ok := a[k]
 		if ok {
@@ -345,9 +338,7 @@ func mergeMap(a map[int]string, b map[int]string) map[int]string { /* {{{ */
 	return a
 }
 
-/* }}} */
-
-func diffAssocArrMapToArr(a []string, b map[int]string) []string { /* {{{ */
+func diffAssocArrMapToArr(a []string, b map[int]string) []string {
 	resultArr := make([]string, 0)
 
 	for i := 0; i < len(a); i++ {
@@ -370,9 +361,7 @@ func diffAssocArrMapToArr(a []string, b map[int]string) []string { /* {{{ */
 	return resultArr
 }
 
-/* }}} */
-
-func diffAssocArr(a []string, b []string) map[int]string { /* {{{ */
+func diffAssocArr(a []string, b []string) map[int]string {
 	resultMap := make(map[int]string)
 	for kb, vb := range b {
 		if kb < len(a) {
@@ -394,9 +383,7 @@ func diffAssocArr(a []string, b []string) map[int]string { /* {{{ */
 	return resultMap
 }
 
-/* }}} */
-
-func deduplicateCompressionPattern(matches map[int][]string, pattern string) (map[string]int, string) { /* {{{ */
+func deduplicateCompressionPattern(matches map[int][]string, pattern string) (map[string]int, string) {
 	matchesCopy := make(map[int][]string, len(matches))
 
 	minIndex := 0
@@ -455,16 +442,14 @@ func deduplicateCompressionPattern(matches map[int][]string, pattern string) (ma
 	return prepared_matches, resultPattern
 }
 
-/* }}} */
-
-func deduplicatePatterns(patterns map[string]*TmpPattern) map[string]*DeduplicatedPattern { /* {{{ */
+func deduplicatePatterns(patterns map[string]*TmpPattern) map[string]*DeduplicatedPattern {
 	resultMap := make(map[string]*DeduplicatedPattern)
 	for key, value := range patterns {
 		result := new(DeduplicatedPattern)
 		if value.intval == 0 {
 			if len(value.matches) == 1 && value.first != "" {
 				key = value.first
-				for match_key, _ := range value.matches {
+				for match_key := range value.matches {
 					result.intval = match_key
 				}
 			} else {
@@ -480,28 +465,25 @@ func deduplicatePatterns(patterns map[string]*TmpPattern) map[string]*Deduplicat
 	return resultMap
 }
 
-/* }}} */
-
-func compileAndAddBatchRegex(batchesArr []*Batch, patternStr string, batchIndex int) ([]*Batch, error) { /* {{{ */
+func compileAndAddBatchRegex(batchesArr []*Batch, patternStr string, batchIndex int) ([]*Batch, error) {
 	regex, err := pcre.Compile(patternStr, pcre.CASELESS)
 	if err != nil {
-		return nil, fmt.Errorf("%s", err.String())
+		return nil, fmt.Errorf("pcre.Compile(%s): %s", patternStr, err.String())
 	}
-	batch := new(Batch)
-	batch.regex = &regex
-	batch.patternStr = patternStr
-	batch.index = batchIndex
-	batchesArr[batchIndex] = batch
+	batch := Batch{
+		regex:      &regex,
+		patternStr: patternStr,
+		index:      batchIndex,
+	}
+	batchesArr = append(batchesArr, &batch)
 	return batchesArr, nil
 }
 
-/* }}} */
-
-func createRegexpBatches(patterns []*Pattern, batchSize int) ([]*Batch, error) { /* {{{ */
+func createRegexpBatches(patterns []*Pattern, batchSize int) ([]*Batch, error) {
 	var err error
 	batchIndex := 0
 	numInBatch := 1
-	batches := make([]*Batch, len(patterns)/batchSize+1)
+	batches := make([]*Batch, 0, len(patterns)/batchSize+1)
 	batchStr := "^"
 	for i := 0; i < len(patterns); i++ {
 
@@ -537,9 +519,7 @@ func createRegexpBatches(patterns []*Pattern, batchSize int) ([]*Batch, error) {
 	return batches, nil
 }
 
-/* }}} */
-
-func processIniSections(sectionMap map[int]string, sections map[int]*IniSection) map[string]*TmpPattern { /* {{{ */
+func processIniSections(sectionMap map[int]string, sections map[int]*IniSection) map[string]*TmpPattern {
 	tmpPatterns := make(map[string]*TmpPattern)
 
 	for i := 0; i < len(sectionMap); i++ {
@@ -554,7 +534,7 @@ func processIniSections(sectionMap map[int]string, sections map[int]*IniSection)
 			pattern = strings.Replace(pattern, `\?`, `.`, -1)   //
 			pattern = strings.Replace(pattern, `\x`, `\\x`, -1) //the \\x replacement is a fix for "Der gro\xdfe BilderSauger 2.00u" user agent match" (c)
 
-			regex, _ := regexp.Compile("\\d")
+			regex, _ := regexp.Compile(`\d`)
 			matches := regex.FindAllString(pattern, -1)
 
 			if len(matches) == 0 {
@@ -566,7 +546,7 @@ func processIniSections(sectionMap map[int]string, sections map[int]*IniSection)
 				compressedPattern := regex.ReplaceAllString(pattern, `(\d)`)
 
 				_, ok := tmpPatterns[compressedPattern]
-				if ok == false {
+				if !ok {
 					p := new(TmpPattern)
 					p.first = pattern
 					p.position = i
@@ -586,9 +566,7 @@ func processIniSections(sectionMap map[int]string, sections map[int]*IniSection)
 	return tmpPatterns
 }
 
-/* }}} */
-
-func LoadIniFile(path string, batchSize int) (*IniFile, error) { /* {{{ */
+func LoadIniFile(path string, batchSize int) (*IniFile, error) {
 	version, sectionMap, sections, err := parseIniFile(path)
 	if err != nil {
 		return nil, err
@@ -652,7 +630,7 @@ func LoadIniFile(path string, batchSize int) (*IniFile, error) { /* {{{ */
 
 	batches, err := createRegexpBatches(readyPatterns, batchSize)
 	if err != nil {
-		return nil, fmt.Errorf("failed to compile batch regex: %s", err)
+		return nil, fmt.Errorf("failed to compile batch regex: %w", err)
 	}
 
 	iniFile := new(IniFile)
@@ -664,5 +642,3 @@ func LoadIniFile(path string, batchSize int) (*IniFile, error) { /* {{{ */
 
 	return iniFile, nil
 }
-
-/* }}} */
