@@ -3,7 +3,7 @@
 package main
 
 import "fmt"
-import "gobrowscap"
+import "github.com/tony2001/gobrowscap"
 
 func main() {
 
